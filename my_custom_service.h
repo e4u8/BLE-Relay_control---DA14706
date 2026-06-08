@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 #include <ble_service.h>
+#include "meas_packet.h"
 
 
 /* User-defined callback functions - Prototyping */
@@ -83,6 +84,16 @@ void mcs_set_char_value_cfm(ble_service_t *svc, uint16_t conn_idx, att_error_t s
  */
 void mcs_notify_char_value_all(ble_service_t *svc, const uint8_t *value);
 
+
+/*
+ * Notify all connected peer devices with a new 15-byte measurement packet
+ * on the measurements characteristic (UUID 22222222-...).
+ * Only clients that have enabled CCC notifications receive the event.
+ *
+ * \param[in] svc   service instance
+ * \param[in] pkt   pointer to the packed measurement struct (15 bytes)
+ */
+void mcs_notify_meas_all(ble_service_t *svc, const meas_packet_t *pkt);
 
 
 #endif /* MY_CUSTOM_SERVICE_H_ */

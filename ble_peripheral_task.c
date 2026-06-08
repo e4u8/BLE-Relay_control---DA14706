@@ -33,13 +33,17 @@
 #include "cts.h"
 #include "dis.h"
 #include "scps.h"
+#include "meas_packet.h"   /* meas_packet_t, g_meas_queue, MEAS_DATA_NOTIF */
 
 /*
  * Notification bits reservation
  * bit #0 is always assigned to BLE event queue notification
+ * bit #2 CTS_SET_TIME_NOTIF
+ * bit #3 BCS_TIMER_NOTIF
+ * bit #4 MEAS_DATA_NOTIF  (defined in meas_packet.h)
  */
 #define CTS_SET_TIME_NOTIF (1 << 2)
-#define BCS_TIMER_NOTIF (1 << 3)
+#define BCS_TIMER_NOTIF    (1 << 3)
 
 /*
  * Bluetooth LE peripheral advertising data
@@ -49,7 +53,9 @@ static const uint8_t adv_data[] = {
         'B', 'L', 'E', '_', 'R', 'e', 'l', 'a', 'y', '_', 'C', 't', 'r', 'l'
 };
 
-static OS_TASK ble_peripheral_task_handle;
+/* Global: gpadc_app_task sends MEAS_DATA_NOTIF on this handle every 1 s.
+ * Declared extern in meas_packet.h. */
+OS_TASK g_ble_peripheral_task_handle;
 
 #if CFG_DEBUG_SERVICE
 __RETAINED static ble_service_t *dbgs;
@@ -138,7 +144,7 @@ static void cts_set_time_cb(ble_service_t *svc, uint16_t conn_idx, const cts_cur
 
         // notify other clients that time has changed
         cts_time.adjust_reason = CTS_AR_MANUAL_TIME_UPDATE;
-        OS_TASK_NOTIFY(ble_peripheral_task_handle, CTS_SET_TIME_NOTIF, OS_NOTIFY_SET_BITS);
+        OS_TASK_NOTIFY(g_ble_peripheral_task_handle, CTS_SET_TIME_NOTIF, OS_NOTIFY_SET_BITS);
 }
 
 static void cts_set_local_time_info_cb(ble_service_t *svc, uint16_t conn_idx,
@@ -450,7 +456,7 @@ OS_TASK_FUNCTION(ble_peripheral_task, params)
         /* register ble_peripheral task to be monitored by watchdog */
         wdog_id = sys_watchdog_register(false);
 
-        ble_peripheral_task_handle = OS_GET_CURRENT_TASK();
+        g_ble_peripheral_task_handle = OS_GET_CURRENT_TASK();
 
         srand(time(NULL));
 
@@ -514,7 +520,7 @@ OS_TASK_FUNCTION(ble_peripheral_task, params)
 #endif
 
 #if CFG_MY_CUSTOM_SERVICE
-        /* Initialize relay GPIO — start with relay OFF */
+        /* Initialize relay GPIO ï¿½ start with relay OFF */
         AD_IO_ERROR io_err = ad_io_set_pad_latch(relay_gpio_cfg,
                                                   ARRAY_LENGTH(relay_gpio_cfg),
                                                   AD_IO_PAD_LATCHES_OP_ENABLE);
@@ -620,6 +626,22 @@ no_event:
 #if CFG_CTS
                 if (notif & CTS_SET_TIME_NOTIF) {
                         cts_notify_time_all(cts, &cts_time);
+                }
+#endif
+
+#if CFG_MY_CUSTOM_SERVICE
+                /* New measurement packet ready from gpadc_app_task */
+                if (notif & MEAS_DATA_NOTIF) {
+                        meas_packet_t pkt;
+                        printf("DBG: MEAS_DATA_NOTIF received\n");
+                        if (OS_QUEUE_GET(g_meas_queue, &pkt, 0) == OS_OK) {
+                                printf("DBG: queue OK, calling notify_all\n");
+                                /* Inject current relay state before sending */
+                                pkt.relay_state = relay_state ? 1u : 0u;
+                                mcs_notify_meas_all(mcs, &pkt);
+                        } else {
+                                printf("DBG: queue EMPTY\n");
+                        }
                 }
 #endif
         }

@@ -51,11 +51,19 @@
 #define dg_configNVMS_ADAPTER                   ( 1 )
 #define dg_configNVMS_VES                       ( 1 )
 #define dg_configNVPARAM_ADAPTER                ( 1 )
+/* GPADC -- 2-channel AC measurement */
 #if DEVICE_FPGA
 #define dg_configGPADC_ADAPTER                  ( 0 )
 #else
+#define dg_configUSE_HW_GPADC                   ( 1 )
 #define dg_configGPADC_ADAPTER                  ( 1 )
+#define dg_configGPADC_DMA_SUPPORT              ( 1 )
+#define dg_configUSE_HW_DMA                     ( 1 )
 #endif
+
+/* I2C -- AHT20 temperature/humidity sensor */
+#define dg_configI2C_ADAPTER                    ( 1 )
+#define dg_configUSE_HW_I2C                     ( 1 )
 
 #if dg_configAUTOTEST_ENABLE
         #define CONFIG_RETARGET
