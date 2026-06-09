@@ -15,8 +15,8 @@ Merged from two working projects:
 | Component | Description |
 |---|---|
 | Renesas DA14706 | DA1470x Pro Development Kit (Cortex-M33) |
-| Voltage sensing | Step-down transformer + resistive divider → P0.5 (ADC CH1) |
-| Current sensing | Hall-effect sensor (80 mV/A sensitivity) → P0.6 (ADC CH0) |
+| Voltage sensing | Step-down transformer + resistive divider → P0.6 (ADC CH1) |
+| Current sensing | Hall-effect sensor (80 mV/A sensitivity) → P0.5 (ADC CH0) |
 | AHT20 | I2C temperature/humidity sensor |
 | Soldered 333024 | 1-channel relay board (250 V AC / 10 A) |
 | LM7805 | 5V regulator for relay VCC in production setup |
@@ -25,8 +25,8 @@ Merged from two working projects:
 
 | Signal | Port/Pin | Notes |
 |---|---|---|
-| ADC CH0 (current) | P0.6 | Hall sensor input, `HW_GPIO_FUNC_ADC` |
-| ADC CH1 (voltage) | P0.5 | Transformer/divider input, `HW_GPIO_FUNC_ADC` |
+| ADC CH0 (current) | P0.5 | Hall sensor input, `HW_GPIO_FUNC_ADC` |
+| ADC CH1 (voltage) | P0.6 | Transformer/divider input, `HW_GPIO_FUNC_ADC` |
 | I2C SDA (AHT20) | Configured in `platform_devices.c` | |
 | I2C SCL (AHT20) | Configured in `platform_devices.c` | |
 | Relay IN | P1.0 (MikroBUS 1 PWM) | `HW_GPIO_POWER_V33`, active-high |
@@ -90,17 +90,17 @@ Three FreeRTOS tasks run concurrently at `OS_TASK_PRIORITY_NORMAL`:
                             ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  ble_peripheral_task                                         │
-│  • BLE GATT server (advertising, connection management)     │
-│  • Handles relay write commands on characteristic 1         │
-│  • On MEAS_DATA_NOTIF: dequeues packet, injects relay_state │
-│    → mcs_notify_meas_all() → GATT notification to clients   │
+│  • BLE GATT server (advertising, connection management)      │
+│  • Handles relay write commands on characteristic 1          │
+│  • On MEAS_DATA_NOTIF: dequeues packet, injects relay_state  │
+│    → mcs_notify_meas_all() → GATT notification to clients    │
 └──────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────┐
 │  aht20_task                                                  │
-│  • Polls AHT20 over I2C every ~2 s                          │
-│  • Updates g_last_temp_c, g_last_hum_percent (volatile)     │
-│  • gpadc_app_task snapshots these at each 1-second window   │
+│  • Polls AHT20 over I2C every ~2 s                           │
+│  • Updates g_last_temp_c, g_last_hum_percent (volatile)      │
+│  • gpadc_app_task snapshots these at each 1-second window    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
