@@ -39,12 +39,6 @@ extern volatile uint8_t g_last_hum_percent;
 /* ── Acquisition ─────────────────────────────────────────────────────────── */
 #define BATCH_SIZE      64
 
-/* ── Calibration ─────────────────────────────────────────────────────────── */
-#define OFFSET_MV_CH0   0.0f
-#define GAIN_CH0        1.0f
-#define OFFSET_MV_CH1   0.0f
-#define GAIN_CH1        1.0f
-
 /* ── RMS scaling ─────────────────────────────────────────────────────────── *
  * K_V  : mains Volts per ADC millivolt   [V/V]  — transformer ratio +       *
  *         signal conditioning attenuation.                                    *
@@ -74,12 +68,6 @@ extern volatile uint8_t g_last_hum_percent;
 
 void gpadc_app_init(void) {}
 
-static float correct_mv(uint32_t mv_raw, float offset, float gain)
-{
-        if ((float)mv_raw < offset) return 0.0f;
-        return ((float)mv_raw - offset) / gain;
-}
-
 typedef struct {
         float rms_mv_v;  /* CH1 voltage AC RMS [mV] */
         float rms_mv_i;  /* CH0 current AC RMS [mV] */
@@ -98,21 +86,15 @@ typedef struct {
 static batch_metrics_t compute_batch_metrics(
         const uint16_t *raw_v, const uint16_t *raw_i, int n,
         const ad_gpadc_driver_conf_t *drv_v,
-        const ad_gpadc_driver_conf_t *drv_i,
-        float offset_v, float gain_v,
-        float offset_i, float gain_i)
+        const ad_gpadc_driver_conf_t *drv_i)
 {
         float mv_v[BATCH_SIZE];
         float mv_i[BATCH_SIZE];
 
         float sum_v = 0.0f, sum_i = 0.0f;
         for (int k = 0; k < n; k++) {
-                mv_v[k] = correct_mv(
-                        (uint32_t)ad_gpadc_conv_to_mvolt(drv_v, raw_v[k]),
-                        offset_v, gain_v);
-                mv_i[k] = correct_mv(
-                        (uint32_t)ad_gpadc_conv_to_mvolt(drv_i, raw_i[k]),
-                        offset_i, gain_i);
+                mv_v[k] = (float)ad_gpadc_conv_to_mvolt(drv_v, raw_v[k]);
+                mv_i[k] = (float)ad_gpadc_conv_to_mvolt(drv_i, raw_i[k]);
                 sum_v += mv_v[k];
                 sum_i += mv_i[k];
         }
@@ -213,9 +195,7 @@ void gpadc_app_task(void *pvParameters)
                 {
                         batch_metrics_t m = compute_batch_metrics(
                                 raw1, raw0, BATCH_SIZE,
-                                CHAN1_DEVICE->drv, CHAN0_DEVICE->drv,
-                                OFFSET_MV_CH1, GAIN_CH1,
-                                OFFSET_MV_CH0, GAIN_CH0);
+                                CHAN1_DEVICE->drv, CHAN0_DEVICE->drv);
                         rms2_accum_ch1 += m.rms_mv_v * m.rms_mv_v;
                         rms2_accum_ch0 += m.rms_mv_i * m.rms_mv_i;
                         p_accum        += m.p_mvsq;
@@ -224,12 +204,8 @@ void gpadc_app_task(void *pvParameters)
                 /* ── 3. Per-sample CSV print (disabled; enable for plotter) ─ */
 #if 0
                 for (int i = 0; i < BATCH_SIZE; i++) {
-                        int mv0_val = (int)correct_mv(
-                                (uint32_t)ad_gpadc_conv_to_mvolt(CHAN0_DEVICE->drv, raw0[i]),
-                                OFFSET_MV_CH0, GAIN_CH0);
-                        int mv1_val = (int)correct_mv(
-                                (uint32_t)ad_gpadc_conv_to_mvolt(CHAN1_DEVICE->drv, raw1[i]),
-                                OFFSET_MV_CH1, GAIN_CH1);
+                        int mv0_val = (int)ad_gpadc_conv_to_mvolt(CHAN0_DEVICE->drv, raw0[i]);
+                        int mv1_val = (int)ad_gpadc_conv_to_mvolt(CHAN1_DEVICE->drv, raw1[i]);
                         printf("%d,%d\n", mv0_val, mv1_val);
                 }
 #endif
