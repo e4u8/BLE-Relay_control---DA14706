@@ -21,6 +21,7 @@
  ****************************************************************************************
  */
 
+#include <stdio.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -83,7 +84,7 @@ static att_error_t do_char_value_write(mc_service_t *mcs, uint16_t conn_idx,
         ct = get_u8(value);
         mcs->cb->set_characteristic_value(&mcs->svc, conn_idx, &ct);
 
-        return ATT_ERROR_OK;
+        return (att_error_t) -1;  /* confirmed inside the callback via mcs_set_char_value_cfm */
 }
 
 static att_error_t do_char_value_ccc_write(mc_service_t *mcs, uint16_t conn_idx,
@@ -132,6 +133,7 @@ static att_error_t do_meas_ccc_write(mc_service_t *mcs, uint16_t conn_idx,
 
         ccc = get_u16(value);
         ble_storage_put_u32(conn_idx, mcs->mc_meas_value_ccc_h, ccc, true);
+        printf("DBG: meas CCC written 0x%04x (conn %d)\r\n", ccc, conn_idx);
 
         return ATT_ERROR_OK;
 }
@@ -264,6 +266,7 @@ static void mcs_notify_meas(ble_service_t *svc, uint16_t conn_idx, const meas_pa
         uint16_t ccc = 0x0000;
 
         ble_storage_get_u16(conn_idx, mcs->mc_meas_value_ccc_h, &ccc);
+        printf("DBG: notify_meas conn=%d ccc=0x%04x\r\n", conn_idx, ccc);
 
         if (!(ccc & GATT_CCC_NOTIFICATIONS)) {
                 return;

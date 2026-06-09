@@ -633,14 +633,14 @@ no_event:
                 /* New measurement packet ready from gpadc_app_task */
                 if (notif & MEAS_DATA_NOTIF) {
                         meas_packet_t pkt;
-                        printf("DBG: MEAS_DATA_NOTIF received\n");
+                        printf("DBG: MEAS_DATA_NOTIF received\r\n");
                         if (OS_QUEUE_GET(g_meas_queue, &pkt, 0) == OS_OK) {
-                                printf("DBG: queue OK, calling notify_all\n");
+                                printf("DBG: queue OK, calling notify_all\r\n");
                                 /* Inject current relay state before sending */
                                 pkt.relay_state = relay_state ? 1u : 0u;
                                 mcs_notify_meas_all(mcs, &pkt);
                         } else {
-                                printf("DBG: queue EMPTY\n");
+                                printf("DBG: queue EMPTY\r\n");
                         }
                 }
 #endif

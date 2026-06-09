@@ -26,6 +26,7 @@
 #include "ad_gpadc.h"
 #include "platform_devices.h"
 #include "include/gpadc_app.h"
+#include "meas_packet.h"   /* meas_packet_t, g_meas_queue, g_ble_peripheral_task_handle, MEAS_DATA_NOTIF */
 
 /* ── Shared AHT20 data (written by aht20_task every ~2 s) ───────────────── */
 extern volatile float   g_last_temp_c;
@@ -285,6 +286,21 @@ void gpadc_app_task(void *pvParameters)
                                 if (t_frac < 0) t_frac = -t_frac;
                                 printf("*Temp=%"PRId32".%02"PRId32" C  *Hum=%u%%\n",
                                        t_int, t_frac, (unsigned)hum);
+
+                                /* Push measurement to BLE notification pipeline.
+                                 * relay_state is injected by ble_peripheral_task. */
+                                meas_packet_t ble_pkt = {
+                                        .v_rms       = (int16_t)v_rms_cV,
+                                        .i_rms       = (int16_t)i_rms_mA,
+                                        .p_w         = p_cW,
+                                        .freq        = 5000,
+                                        .temp        = (int16_t)t_x100,
+                                        .humid       = (uint16_t)((uint32_t)hum * 100u),
+                                        .relay_state = 0,
+                                };
+                                xQueueOverwrite(g_meas_queue, &ble_pkt);
+                                OS_TASK_NOTIFY(g_ble_peripheral_task_handle,
+                                               MEAS_DATA_NOTIF, OS_NOTIFY_SET_BITS);
                         }
 
                         acq_cycles_accum  = 0;
@@ -294,7 +310,7 @@ void gpadc_app_task(void *pvParameters)
                         p_accum           = 0.0f;
                         t_last            = now;
 
-                        /* Each ADC conversion (~478 �s) completes faster than one
+                        /* Each ADC conversion (~478 �s) completes faster than one
                          * FreeRTOS tick (1 ms), so the idle task is never scheduled
                          * and the hardware watchdog starves.  One forced yield per
                          * second is enough to let the idle task feed the watchdog. */
