@@ -177,8 +177,8 @@ Python struct format string: `"<hhihhHB"` (15 bytes).
 
 | Constant | Default | Description |
 |---|---|---|
-| `K_V` | `289.269f` | Mains V per ADC mV — transformer ratio × attenuator |
-| `K_I` | `1.298f` | Signal conditioning gain on current channel |
+| `K_V` | `283.620f` | Mains V per ADC mV — transformer ratio × attenuator (calibrated 10/06) |
+| `K_I` | `1.297f` | Signal conditioning gain on current channel (calibrated 10/06) |
 | `HALL_SENSITIVITY_MV_PER_A` | `80.0f` | Hall sensor sensitivity [mV/A] |
 | `P_SIGN` | `-1.0f` | Set to -1 when signal conditioning inverts one channel |
 | `OFFSET_MV_CH0/1` | `0.0f` | Per-channel ADC DC offset correction [mV] |
@@ -223,13 +223,10 @@ Expected output at each 1-second window:
 ```
 *skew=15312 cycles (~478 us)        ← inter-channel ADC delay (printed once at startup)
 *fs_acq=2096  *us_pair=478          ← acquisition throughput
-*Vrms=230.45 V  *Irms=4.412 A
-*P=1042.30 W
-*S=1016.73 VA
-*Q=234.51 VAr
-*PF=0.985
 *Temp=25.84 C  *Hum=38%
 ```
+
+> Vrms, Irms, P, S, Q, and PF serial prints are disabled in this version. All power metrics are computed on the Central Node from the BLE measurement packet.
 
 ---
 

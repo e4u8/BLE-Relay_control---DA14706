@@ -45,8 +45,8 @@ extern volatile uint8_t g_last_hum_percent;
  * K_I  : Hall sensor mV per ADC millivolt [mV/mV] — signal conditioning.    *
  * HALL_SENSITIVITY_MV_PER_A : Hall sensor output sensitivity [mV/A].        *
  * ─────────────────────────────────────────────────────────────────────────  */
-#define K_V                       (289.269f)
-#define K_I                       (1.298f)
+#define K_V                       (283.620f)    // calibration 10/06
+#define K_I                       (1.297f)      // calibration 10/06 
 #define HALL_SENSITIVITY_MV_PER_A (80.0f)
 #define P_SIGN                    (-1.0f)   /* -1: signal conditioning inverts one channel */
 
@@ -233,25 +233,25 @@ void gpadc_app_task(void *pvParameters)
                                 int32_t v_rms_cV = (int32_t)(v_rms * V_RMS_SCALE);
                                 int32_t i_rms_mA = (int32_t)(i_rms * I_RMS_SCALE);
 
-                                printf("*Vrms=%"PRId32".%02"PRId32" V  *Irms=%"PRId32".%03"PRId32" A\n",
-                                       v_rms_cV / 100,  v_rms_cV % 100,
-                                       i_rms_mA / 1000, i_rms_mA % 1000);
+                                //printf("*Vrms=%"PRId32".%02"PRId32" V  *Irms=%"PRId32".%03"PRId32" A\n",
+                                //       v_rms_cV / 100,  v_rms_cV % 100,
+                                //       i_rms_mA / 1000, i_rms_mA % 1000);
 
                                 float p_w   = P_SIGN * P_SCALE * (p_accum / (float)batches_in_window);
-                                float s_va  = v_rms * i_rms;
-                                float q_var = sqrtf(fabsf(s_va * s_va - p_w * p_w));
-                                float pf    = (s_va > 0.0f) ? (p_w / s_va) : 0.0f;
+                                //float s_va  = v_rms * i_rms;
+                                //float q_var = sqrtf(fabsf(s_va * s_va - p_w * p_w));
+                                //float pf    = (s_va > 0.0f) ? (p_w / s_va) : 0.0f;
 
                                 int32_t p_cW   = (int32_t)(p_w   * P_W_SCALE);
-                                int32_t s_cVA  = (int32_t)(s_va  * S_VA_SCALE);
-                                int32_t q_cVAr = (int32_t)(q_var * Q_VAR_SCALE);
-                                int32_t pf_m   = (int32_t)(fabsf(pf) * PF_SCALE);
+                                //int32_t s_cVA  = (int32_t)(s_va  * S_VA_SCALE);
+                                //int32_t q_cVAr = (int32_t)(q_var * Q_VAR_SCALE);
+                                //int32_t pf_m   = (int32_t)(fabsf(pf) * PF_SCALE);
 
-                                printf("*P=%"PRId32".%02"PRId32" W\n",  p_cW   / 100, p_cW   % 100);
-                                printf("*S=%"PRId32".%02"PRId32" VA\n", s_cVA  / 100, s_cVA  % 100);
-                                printf("*Q=%"PRId32".%02"PRId32" VAr\n",q_cVAr / 100, q_cVAr % 100);
-                                printf("*PF=%s%"PRId32".%03"PRId32"\n",
-                                       pf < 0.0f ? "-" : "", pf_m / 1000, pf_m % 1000);
+                                //printf("*P=%"PRId32".%02"PRId32" W\n",  p_cW   / 100, p_cW   % 100);
+                                //printf("*S=%"PRId32".%02"PRId32" VA\n", s_cVA  / 100, s_cVA  % 100);
+                                //printf("*Q=%"PRId32".%02"PRId32" VAr\n",q_cVAr / 100, q_cVAr % 100);
+                                //printf("*PF=%s%"PRId32".%03"PRId32"\n",
+                                //       pf < 0.0f ? "-" : "", pf_m / 1000, pf_m % 1000);
 
                                 /* AHT20 snapshot (single volatile read — atomic on CM33) */
                                 float   temp_c = g_last_temp_c;
