@@ -39,14 +39,25 @@ extern volatile uint8_t g_last_hum_percent;
 /* ── Acquisition ─────────────────────────────────────────────────────────── */
 #define BATCH_SIZE      64
 
+/* ── Calibration mode ────────────────────────────────────────────────────── *
+ * Set CALIBRATION_MODE to 1 to print the raw ADC mV RMS averaged over       *
+ * CAL_WINDOW seconds. Use with K_V = K_I = 1. Divide the power analyser     *
+ * reading by the *CAL_ output to obtain the calibration constant:            *
+ *   K_V = V_analyser[V]  * 1000 / CAL_Vmv                                   *
+ *   K_I = I_analyser[A]  * HALL_SENSITIVITY_MV_PER_A / CAL_Imv              *
+ * ─────────────────────────────────────────────────────────────────────────  */
+#define CALIBRATION_MODE  1   /* 1 = enabled, 0 = production */
+#define CAL_WINDOW       10   /* seconds to average before each *CAL_ print  */
+#define SERIAL_MODE       0   /* 1 = enable all diagnostic serial prints, 0 = silent */
+
 /* ── RMS scaling ─────────────────────────────────────────────────────────── *
  * K_V  : mains Volts per ADC millivolt   [V/V]  — transformer ratio +       *
  *         signal conditioning attenuation.                                    *
  * K_I  : Hall sensor mV per ADC millivolt [mV/mV] — signal conditioning.    *
  * HALL_SENSITIVITY_MV_PER_A : Hall sensor output sensitivity [mV/A].        *
  * ─────────────────────────────────────────────────────────────────────────  */
-#define K_V                       (289.269f)
-#define K_I                       (1.298f)
+#define K_V                       (283.620f)    // calibration 10/06
+#define K_I                       (1.297f)      // calibration 10/06
 #define HALL_SENSITIVITY_MV_PER_A (80.0f)
 #define P_SIGN                    (-1.0f)   /* -1: signal conditioning inverts one channel */
 
@@ -130,13 +141,28 @@ void gpadc_app_task(void *pvParameters)
         static float      rms2_accum_ch0    = 0.0f;
         static float      rms2_accum_ch1    = 0.0f;
         static float      p_accum           = 0.0f;
+#if CALIBRATION_MODE
+        static float      cal_vmv_sum       = 0.0f;
+        static float      cal_imv_sum       = 0.0f;
+        static uint8_t    cal_count         = 0;
+#endif
 
         /* Enable DWT cycle counter */
         CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
         DWT->CYCCNT       = 0;
         DWT->CTRL        |= DWT_CTRL_CYCCNTENA_Msk;
 
-        /* Warmup dummy read + inter-channel skew measurement */
+        /* Warmup dummy reads — ADC settling */
+        {
+                uint16_t dummy = 0;
+                ad_gpadc_handle_t h = ad_gpadc_open(CHAN0_DEVICE);
+                if (h) { ad_gpadc_read_nof_conv(h, 1, &dummy); ad_gpadc_close(h, false); }
+                h = ad_gpadc_open(CHAN1_DEVICE);
+                if (h) { ad_gpadc_read_nof_conv(h, 1, &dummy); ad_gpadc_close(h, false); }
+        }
+
+#if SERIAL_MODE
+        /* Inter-channel skew measurement */
         {
                 uint16_t dummy      = 0;
                 uint32_t t_ch0_done = 0;
@@ -165,6 +191,7 @@ void gpadc_app_task(void *pvParameters)
                                (unsigned)skew_cy, (unsigned)skew_us);
                 }
         }
+#endif
 
         for (;;) {
 
@@ -214,18 +241,33 @@ void gpadc_app_task(void *pvParameters)
                 TickType_t now = xTaskGetTickCount();
                 if ((now - t_last) >= pdMS_TO_TICKS(1000)) {
                         if (acq_cycles_accum > 0 && batches_in_window > 0) {
+#if SERIAL_MODE
                                 uint32_t total_pairs = batches_in_window * (uint32_t)BATCH_SIZE;
-
-                                uint32_t fs_acq = (uint32_t)(
-                                        (uint64_t)total_pairs * 2UL * CPU_CLOCK_HZ
-                                        / acq_cycles_accum);
-                                uint32_t us_pair = acq_cycles_accum
-                                        / (total_pairs * (CPU_CLOCK_HZ / 1000000UL));
+                                uint32_t fs_acq  = (uint32_t)((uint64_t)total_pairs * 2UL * CPU_CLOCK_HZ / acq_cycles_accum);
+                                uint32_t us_pair = acq_cycles_accum / (total_pairs * (CPU_CLOCK_HZ / 1000000UL));
                                 printf("*fs_acq=%u  *us_pair=%u\n",
                                        (unsigned)fs_acq, (unsigned)us_pair);
+#endif
 
                                 float rms_mv0_w = sqrtf(rms2_accum_ch0 / (float)batches_in_window);
                                 float rms_mv1_w = sqrtf(rms2_accum_ch1 / (float)batches_in_window);
+
+#if CALIBRATION_MODE
+                                /* Accumulate raw ADC mV RMS; print mean every CAL_WINDOW seconds.
+                                 * K_V = V_analyser[V]*1000/CAL_Vmv, K_I = I_analyser[A]*HALL_SENSITIVITY_MV_PER_A/CAL_Imv */
+                                cal_vmv_sum += rms_mv1_w;
+                                cal_imv_sum += rms_mv0_w;
+                                if (++cal_count >= CAL_WINDOW) {
+                                        int32_t vmv_x100 = (int32_t)(cal_vmv_sum / CAL_WINDOW * 100.0f);
+                                        int32_t imv_x100 = (int32_t)(cal_imv_sum / CAL_WINDOW * 100.0f);
+                                        printf("*CAL_Vmv=%"PRId32".%02"PRId32"  *CAL_Imv=%"PRId32".%02"PRId32"\n",
+                                               vmv_x100 / 100, vmv_x100 % 100,
+                                               imv_x100 / 100, imv_x100 % 100);
+                                        cal_vmv_sum = 0.0f;
+                                        cal_imv_sum = 0.0f;
+                                        cal_count   = 0;
+                                }
+#endif
 
                                 float v_rms = K_V * rms_mv1_w / 1000.0f;
                                 float i_rms = (K_I * rms_mv0_w) / HALL_SENSITIVITY_MV_PER_A;
@@ -233,35 +275,41 @@ void gpadc_app_task(void *pvParameters)
                                 int32_t v_rms_cV = (int32_t)(v_rms * V_RMS_SCALE);
                                 int32_t i_rms_mA = (int32_t)(i_rms * I_RMS_SCALE);
 
+#if SERIAL_MODE
                                 printf("*Vrms=%"PRId32".%02"PRId32" V  *Irms=%"PRId32".%03"PRId32" A\n",
                                        v_rms_cV / 100,  v_rms_cV % 100,
                                        i_rms_mA / 1000, i_rms_mA % 1000);
+#endif
 
-                                float p_w   = P_SIGN * P_SCALE * (p_accum / (float)batches_in_window);
+                                float   p_w  = P_SIGN * P_SCALE * (p_accum / (float)batches_in_window);
+                                int32_t p_cW = (int32_t)(p_w * P_W_SCALE);
+#if SERIAL_MODE
                                 float s_va  = v_rms * i_rms;
                                 float q_var = sqrtf(fabsf(s_va * s_va - p_w * p_w));
                                 float pf    = (s_va > 0.0f) ? (p_w / s_va) : 0.0f;
 
-                                int32_t p_cW   = (int32_t)(p_w   * P_W_SCALE);
                                 int32_t s_cVA  = (int32_t)(s_va  * S_VA_SCALE);
                                 int32_t q_cVAr = (int32_t)(q_var * Q_VAR_SCALE);
                                 int32_t pf_m   = (int32_t)(fabsf(pf) * PF_SCALE);
 
-                                printf("*P=%"PRId32".%02"PRId32" W\n",  p_cW   / 100, p_cW   % 100);
-                                printf("*S=%"PRId32".%02"PRId32" VA\n", s_cVA  / 100, s_cVA  % 100);
+                                printf("*P=%"PRId32".%02"PRId32" W\n",  p_cW  / 100, p_cW  % 100);
+                                printf("*S=%"PRId32".%02"PRId32" VA\n", s_cVA / 100, s_cVA % 100);
                                 printf("*Q=%"PRId32".%02"PRId32" VAr\n",q_cVAr / 100, q_cVAr % 100);
                                 printf("*PF=%s%"PRId32".%03"PRId32"\n",
                                        pf < 0.0f ? "-" : "", pf_m / 1000, pf_m % 1000);
+#endif
 
                                 /* AHT20 snapshot (single volatile read — atomic on CM33) */
                                 float   temp_c = g_last_temp_c;
                                 uint8_t hum    = g_last_hum_percent;
                                 int32_t t_x100 = (int32_t)(temp_c * 100.0f);
+#if SERIAL_MODE
                                 int32_t t_int  = t_x100 / 100;
                                 int32_t t_frac = t_x100 % 100;
                                 if (t_frac < 0) t_frac = -t_frac;
                                 printf("*Temp=%"PRId32".%02"PRId32" C  *Hum=%u%%\n",
                                        t_int, t_frac, (unsigned)hum);
+#endif
 
                                 /* Push measurement to BLE notification pipeline.
                                  * relay_state is injected by ble_peripheral_task. */
