@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
+#include <stdlib.h>
 #include <math.h>
 #include "osal.h"
 #include "ad_gpadc.h"
@@ -247,11 +248,11 @@ void gpadc_app_task(void *pvParameters)
                                 //int32_t q_cVAr = (int32_t)(q_var * Q_VAR_SCALE);
                                 //int32_t pf_m   = (int32_t)(fabsf(pf) * PF_SCALE);
 
-                                //printf("*P=%"PRId32".%02"PRId32" W\n",  p_cW   / 100, p_cW   % 100);
-                                //printf("*S=%"PRId32".%02"PRId32" VA\n", s_cVA  / 100, s_cVA  % 100);
-                                //printf("*Q=%"PRId32".%02"PRId32" VAr\n",q_cVAr / 100, q_cVAr % 100);
+                                //printf("*P=%"PRId32".%02"PRId32" W\n",  p_cW   / 100, (int32_t)abs(p_cW)   % 100);
+                                //printf("*S=%"PRId32".%02"PRId32" VA\n", s_cVA  / 100, (int32_t)abs(s_cVA)  % 100);
+                                //printf("*Q=%"PRId32".%02"PRId32" VAr\n",q_cVAr / 100, (int32_t)abs(q_cVAr) % 100);
                                 //printf("*PF=%s%"PRId32".%03"PRId32"\n",
-                                //       pf < 0.0f ? "-" : "", pf_m / 1000, pf_m % 1000);
+                                //       pf < 0.0f ? "-" : "", pf_m / 1000, (int32_t)abs(pf_m) % 1000);
 
                                 /* AHT20 snapshot (single volatile read — atomic on CM33) */
                                 float   temp_c = g_last_temp_c;
